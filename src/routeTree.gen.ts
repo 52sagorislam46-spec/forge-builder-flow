@@ -11,8 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdvisorRouteImport } from './routes/advisor'
+import { Route as AgroRouteImport } from './routes/agro'
 import { Route as CampaignsRouteImport } from './routes/campaigns'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ApiDiagnoseRouteImport } from './routes/api/diagnose'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const AdvisorRoute = AdvisorRouteImport.update({
   id: '/advisor',
   path: '/advisor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgroRoute = AgroRouteImport.update({
+  id: '/agro',
+  path: '/agro',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CampaignsRoute = CampaignsRouteImport.update({
@@ -34,39 +41,71 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDiagnoseRoute = ApiDiagnoseRouteImport.update({
+  id: '/api/diagnose',
+  path: '/api/diagnose',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/advisor': typeof AdvisorRoute
+  '/agro': typeof AgroRoute
   '/campaigns': typeof CampaignsRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/api/diagnose': typeof ApiDiagnoseRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/advisor': typeof AdvisorRoute
+  '/agro': typeof AgroRoute
   '/campaigns': typeof CampaignsRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/api/diagnose': typeof ApiDiagnoseRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/advisor': typeof AdvisorRoute
+  '/agro': typeof AgroRoute
   '/campaigns': typeof CampaignsRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/api/diagnose': typeof ApiDiagnoseRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/advisor' | '/campaigns' | '/reset-password'
+  fullPaths:
+    | '/'
+    | '/advisor'
+    | '/agro'
+    | '/campaigns'
+    | '/reset-password'
+    | '/api/diagnose'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/advisor' | '/campaigns' | '/reset-password'
-  id: '__root__' | '/' | '/advisor' | '/campaigns' | '/reset-password'
+  to:
+    | '/'
+    | '/advisor'
+    | '/agro'
+    | '/campaigns'
+    | '/reset-password'
+    | '/api/diagnose'
+  id:
+    | '__root__'
+    | '/'
+    | '/advisor'
+    | '/agro'
+    | '/campaigns'
+    | '/reset-password'
+    | '/api/diagnose'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdvisorRoute: typeof AdvisorRoute
+  AgroRoute: typeof AgroRoute
   CampaignsRoute: typeof CampaignsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiDiagnoseRoute: typeof ApiDiagnoseRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -85,6 +124,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdvisorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agro': {
+      id: '/agro'
+      path: '/agro'
+      fullPath: '/agro'
+      preLoaderRoute: typeof AgroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/campaigns': {
       id: '/campaigns'
       path: '/campaigns'
@@ -99,14 +145,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/diagnose': {
+      id: '/api/diagnose'
+      path: '/api/diagnose'
+      fullPath: '/api/diagnose'
+      preLoaderRoute: typeof ApiDiagnoseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdvisorRoute: AdvisorRoute,
+  AgroRoute: AgroRoute,
   CampaignsRoute: CampaignsRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ApiDiagnoseRoute: ApiDiagnoseRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

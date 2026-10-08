@@ -21,7 +21,7 @@ import { BoostRequestsPage } from "./BoostRequestsPage";
 import { MonetizationPanel } from "./MonetizationPanel";
 import { BadgeDollarSign } from "lucide-react";
 import { Rocket } from "lucide-react";
-import { Wallet, Crown } from "lucide-react";
+import { Wallet, Crown, Sprout } from "lucide-react";
 import { isVipOf, VIP_DAYS, vipFeeOf, subscribeVip, INSUFFICIENT_MSG, VIP_MIN_FEE, VIP_MAX_FEE, VIP_FEE_PLANS, hasFeeAccess, buyFeePlan } from "./vip";
 import { useDarkMode } from "./theme";
 import { isAdmin } from "./admins";
@@ -369,6 +369,13 @@ export function ProfilePage({
                 <BadgeCheck size={20} className="text-gray-500" />
                 <span className="text-sm font-medium">Creator Dashboard</span>
               </button>
+              <a
+                href="/agro"
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left text-gray-800 hover:bg-gray-50"
+              >
+                <Sprout size={20} className="text-gray-500" />
+                <span className="text-sm font-medium">Fly Agro — কৃষকের বন্ধু</span>
+              </a>
               <button
                 onClick={() => {
                   setShowMenu(false);
