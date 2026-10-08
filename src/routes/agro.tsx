@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import ReactMarkdown from "react-markdown";
 import { Bird, Camera, Carrot, Fish, ImagePlus, Loader2, Milk, RotateCcw, Send, Sprout, TreePine, X } from "lucide-react";
@@ -103,6 +103,7 @@ function Index() {
   return (
     <div className="mx-auto min-h-screen max-w-md bg-background pb-10">
       <header className="sticky top-0 z-10 flex items-center gap-3 bg-primary px-5 py-4 text-primary-foreground shadow-md">
+        <Link to="/" aria-label="ফিরে যান" className="text-2xl leading-none">←</Link>
         <div className="grid h-11 w-11 place-items-center rounded-full bg-accent text-accent-foreground">
           <Sprout className="h-6 w-6" />
         </div>
