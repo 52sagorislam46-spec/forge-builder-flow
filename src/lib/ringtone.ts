@@ -74,19 +74,33 @@ function buildRing(
 let ringtoneUri: string | null = null;
 let ringbackUri: string | null = null;
 
-/** Incoming-call ringtone: ring · ring · pause (loops seamlessly). */
+/** Sweet marimba-like melody used for every incoming call (loops seamlessly). */
+function buildMelody(gain: number): string {
+  // C6 E6 G6 E6 · C6 E6 G6 C7 — bright, clear and pleasant.
+  const notes = [1046.5, 1318.5, 1568, 1318.5, 1046.5, 1318.5, 1568, 2093];
+  const step = 0.18;
+  const tail = 1.3;
+  const total = notes.length * step + tail;
+  const samples = new Float32Array(Math.round(total * SAMPLE_RATE));
+  notes.forEach((freq, n) => {
+    const start = Math.round(n * step * SAMPLE_RATE);
+    const len = Math.round(0.6 * SAMPLE_RATE);
+    for (let i = 0; i < len && start + i < samples.length; i++) {
+      const t = i / SAMPLE_RATE;
+      const env = Math.min(1, t / 0.005) * Math.exp(-t * 6);
+      const v =
+        Math.sin(2 * Math.PI * freq * t) * 0.7 +
+        Math.sin(2 * Math.PI * freq * 2 * t) * 0.2 * Math.exp(-t * 12) +
+        Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.15;
+      samples[start + i] = (samples[start + i] ?? 0) + v * env * gain;
+    }
+  });
+  return encodeWav(samples, SAMPLE_RATE);
+}
+
+/** Incoming-call ringtone (shared by inbox and group calls). */
 export function ringtoneDataUri(): string {
-  if (!ringtoneUri) {
-    ringtoneUri = buildRing(
-      [
-        { on: true, seconds: 0.4 },
-        { on: false, seconds: 0.2 },
-        { on: true, seconds: 0.4 },
-        { on: false, seconds: 1.6 },
-      ],
-      0.6,
-    );
-  }
+  if (!ringtoneUri) ringtoneUri = buildMelody(0.55);
   return ringtoneUri;
 }
 

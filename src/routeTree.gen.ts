@@ -15,6 +15,7 @@ import { Route as AgroRouteImport } from './routes/agro'
 import { Route as CampaignsRouteImport } from './routes/campaigns'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ApiDiagnoseRouteImport } from './routes/api/diagnose'
+import { Route as ApiFlyAiRouteImport } from './routes/api/fly-ai'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +47,11 @@ const ApiDiagnoseRoute = ApiDiagnoseRouteImport.update({
   path: '/api/diagnose',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiFlyAiRoute = ApiFlyAiRouteImport.update({
+  id: '/api/fly-ai',
+  path: '/api/fly-ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/campaigns': typeof CampaignsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/api/diagnose': typeof ApiDiagnoseRoute
+  '/api/fly-ai': typeof ApiFlyAiRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/campaigns': typeof CampaignsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/api/diagnose': typeof ApiDiagnoseRoute
+  '/api/fly-ai': typeof ApiFlyAiRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,6 +79,7 @@ export interface FileRoutesById {
   '/campaigns': typeof CampaignsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/api/diagnose': typeof ApiDiagnoseRoute
+  '/api/fly-ai': typeof ApiFlyAiRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -81,6 +90,7 @@ export interface FileRouteTypes {
     | '/campaigns'
     | '/reset-password'
     | '/api/diagnose'
+    | '/api/fly-ai'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -89,6 +99,7 @@ export interface FileRouteTypes {
     | '/campaigns'
     | '/reset-password'
     | '/api/diagnose'
+    | '/api/fly-ai'
   id:
     | '__root__'
     | '/'
@@ -97,6 +108,7 @@ export interface FileRouteTypes {
     | '/campaigns'
     | '/reset-password'
     | '/api/diagnose'
+    | '/api/fly-ai'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -106,6 +118,7 @@ export interface RootRouteChildren {
   CampaignsRoute: typeof CampaignsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiDiagnoseRoute: typeof ApiDiagnoseRoute
+  ApiFlyAiRoute: typeof ApiFlyAiRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -152,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDiagnoseRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/fly-ai': {
+      id: '/api/fly-ai'
+      path: '/api/fly-ai'
+      fullPath: '/api/fly-ai'
+      preLoaderRoute: typeof ApiFlyAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -162,6 +182,7 @@ const rootRouteChildren: RootRouteChildren = {
   CampaignsRoute: CampaignsRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ApiDiagnoseRoute: ApiDiagnoseRoute,
+  ApiFlyAiRoute: ApiFlyAiRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

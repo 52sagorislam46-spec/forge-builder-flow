@@ -22,6 +22,7 @@ import { bindAudioUnlock } from "../../lib/notify";
 import { pushToUsers } from "../../lib/push";
 import {
   RTC_CONFIG,
+  ensureIceServers,
   createRingback,
   createRingtone,
   waitForIceGathering,
@@ -376,6 +377,7 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
       const me = user?.uid;
       if (!me || joinedRef.current) return;
       try {
+        await ensureIceServers();
         const stream = await getMedia(data.type);
         localStreamRef.current = stream;
         stream.getAudioTracks().forEach((t) => (t.enabled = !mutedRef.current));
@@ -525,8 +527,11 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
         .filter(
           (item) =>
             item.hostId !== user.uid &&
-            (item.status === "ringing" || item.status === "active") &&
-            (!item.expiresAt || item.expiresAt > Date.now()),
+            // A live call can always be joined; a ringing one only while
+            // it is still fresh (so an abandoned call never rings forever).
+            (item.status === "active" ||
+              (item.status === "ringing" &&
+                (!item.expiresAt || item.expiresAt > Date.now()))),
         )
         .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
       if (!found) return;

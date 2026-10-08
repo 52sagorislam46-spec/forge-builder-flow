@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getMicStream, withRetry } from "../../lib/mic";
 import {
   ArrowLeft,
   Bell,
@@ -246,7 +247,7 @@ export function ChatView({
     const isMine = latest.senderId === user?.uid;
     lastMsgIdRef.current = latest.id;
     if (isMine || atBottomRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
     }
   }, [visible, user]);
 
@@ -289,7 +290,7 @@ export function ChatView({
       const voice = new File([blob], `voice-${Date.now()}.${ext}`, {
         type: blob.type || "audio/webm",
       });
-      const uploaded = await uploadToCloudinary(voice);
+      const uploaded = await withRetry(() => uploadToCloudinary(voice));
       await sendMessage(user.uid, other.uid, "", {
         url: uploaded.url,
         type: "audio",
@@ -306,7 +307,10 @@ export function ChatView({
     if (recording || recorderRef.current) return;
     setError("");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (typeof MediaRecorder === "undefined") {
+        throw new Error("Voice recording isn't supported on this device. Please update the app.");
+      }
+      const stream = await getMicStream();
       recordStreamRef.current = stream;
       recordStartRef.current = Date.now();
       const mimeType = [
@@ -352,8 +356,8 @@ export function ChatView({
       // Small time slices keep chunks flowing so a quick stop still has audio.
       recorder.start(100);
       setRecording(true);
-    } catch {
-      setError("Microphone permission is needed to record voice");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Microphone permission is needed to record voice");
     }
   };
 
@@ -489,7 +493,7 @@ export function ChatView({
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col h-[100dvh] overflow-hidden bg-white">
       <header className="flex items-center gap-3 px-4 h-14 border-b border-gray-100 sticky top-0 bg-white/90 backdrop-blur-xl z-10">
         <button onClick={onBack} aria-label="Back" className="text-gray-500">
           <ArrowLeft size={22} />
@@ -563,7 +567,7 @@ export function ChatView({
           atBottomRef.current =
             el.scrollHeight - el.scrollTop - el.clientHeight < 80;
         }}
-        className={`flex-1 overflow-y-auto px-4 py-4 space-y-2 ${
+        className={`flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] px-4 py-4 space-y-2 ${
           bg.id === "default" ? theme.background : backgroundClass(bg)
         }`}
         style={
@@ -572,7 +576,7 @@ export function ChatView({
                 backgroundImage: `url(${bg.imageUrl})`,
                 backgroundSize: "cover",
                 backgroundPosition: "center",
-                backgroundAttachment: "local",
+                
               }
             : undefined
         }

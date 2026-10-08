@@ -1,0 +1,11 @@
+# Roadmap
+- [x] 1:1 call ringtone (audio + video)
+- [x] Call connection: ICE servers loaded from server, hangup ends both sides
+- [ ] TURN relay key (METERED_DOMAIN + METERED_API_KEY) — waiting on user
+- [x] Group call: ring all members, live "Join Call", history after end
+- [x] Voice messages + mic permission
+- [ ] Android app native mic permission / back key mapping — native app code not in this repo
+- [x] Inbox scrolling
+- [x] Fly AI (answers, image generation, admin Sagor Islam contact)
+- [x] Back button from help center + chat
+- [ ] Push notifications: link existing Firebase Cloud Messaging connection — waiting on user approval

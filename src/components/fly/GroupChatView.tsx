@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getMicStream, withRetry } from "../../lib/mic";
 import {
   ArrowLeft,
   Check,
@@ -165,8 +166,12 @@ export function GroupChatView({
       q,
       (snap) => {
         const live = snap.docs
-          .map((d) => ({ id: d.id, ...(d.data() as { status?: string; type?: string; createdAt?: unknown }) }))
-          .filter((item) => item.status === "active" || item.status === "ringing")
+          .map((d) => ({ id: d.id, ...(d.data() as { status?: string; type?: string; createdAt?: unknown; expiresAt?: number }) }))
+          .filter(
+            (item) =>
+              item.status === "active" ||
+              (item.status === "ringing" && (!item.expiresAt || item.expiresAt > Date.now())),
+          )
           .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))[0];
         setOngoingCall(
           live ? { id: live.id, type: live.type === "video" ? "video" : "audio" } : null,
@@ -194,7 +199,7 @@ export function GroupChatView({
       const voice = new File([blob], `voice-${Date.now()}.${ext}`, {
         type: blob.type || "audio/webm",
       });
-      const uploaded = await uploadToCloudinary(voice);
+      const uploaded = await withRetry(() => uploadToCloudinary(voice));
       await sendGroupMessage(group, user.uid, "", {
         url: uploaded.url,
         type: "audio",
@@ -211,7 +216,10 @@ export function GroupChatView({
     if (recording || recorderRef.current) return;
     setError("");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (typeof MediaRecorder === "undefined") {
+        throw new Error("Voice recording isn't supported on this device. Please update the app.");
+      }
+      const stream = await getMicStream();
       recordStreamRef.current = stream;
       recordStartRef.current = Date.now();
       const mimeType = [
@@ -250,8 +258,8 @@ export function GroupChatView({
       recorderRef.current = recorder;
       recorder.start(100);
       setRecording(true);
-    } catch {
-      setError("Microphone permission is needed to record voice");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Microphone permission is needed to record voice");
     }
   };
 
@@ -354,7 +362,8 @@ export function GroupChatView({
   }, [group.id, user, visible.length]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const box = bottomRef.current?.parentElement;
+    box?.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
   }, [visible.length]);
 
   const memberName = (uid: string) =>
@@ -422,7 +431,7 @@ export function GroupChatView({
 
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col h-[100dvh] overflow-hidden bg-white">
       <header className="flex items-center gap-3 px-4 h-14 border-b border-gray-100 sticky top-0 bg-white/90 backdrop-blur-xl z-10">
         <button onClick={onBack} aria-label="Back" className="text-gray-500">
           <ArrowLeft size={22} />
@@ -488,7 +497,7 @@ export function GroupChatView({
 
 
       <div
-        className={`flex-1 overflow-y-auto px-4 py-4 space-y-2 ${
+        className={`flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] px-4 py-4 space-y-2 ${
           background.id === "default"
             ? `bg-sky-50/30 ${theme.background}`
             : backgroundClass(background)
