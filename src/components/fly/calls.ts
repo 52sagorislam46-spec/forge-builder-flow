@@ -13,6 +13,7 @@ import { db } from "../../lib/firebase";
 import { getAudioContext, vibrate } from "../../lib/notify";
 import { ringbackDataUri, ringtoneDataUri } from "../../lib/ringtone";
 import { isNotifyEnabled } from "../../lib/notificationSettings";
+import { getIceServers } from "../../lib/ice.functions";
 
 export type CallType = "audio" | "video";
 export type CallStatus = "ringing" | "accepted" | "rejected" | "ended";
@@ -39,6 +40,8 @@ export const RTC_CONFIG: RTCConfiguration = {
       urls: [
         "stun:stun.l.google.com:19302",
         "stun:stun1.l.google.com:19302",
+        "stun:stun2.l.google.com:19302",
+        "stun:stun.cloudflare.com:3478",
         "stun:global.stun.twilio.com:3478",
       ],
     },
@@ -56,6 +59,32 @@ export const RTC_CONFIG: RTCConfiguration = {
   ],
   iceCandidatePoolSize: 10,
 };
+
+let iceLoaded: Promise<void> | null = null;
+/**
+ * Loads private TURN relay servers once (from the server) and adds them to
+ * RTC_CONFIG. Without a working TURN relay, calls between two phones on
+ * mobile data get stuck on "Connecting…" with no audio.
+ */
+export function ensureIceServers(): Promise<void> {
+  if (!iceLoaded) {
+    iceLoaded = (async () => {
+      try {
+        const res = await Promise.race([
+          getIceServers(),
+          new Promise<null>((r) => setTimeout(() => r(null), 4000)),
+        ]);
+        const extra = res?.iceServers ?? [];
+        if (extra.length) {
+          RTC_CONFIG.iceServers = [...extra, ...(RTC_CONFIG.iceServers ?? [])];
+        }
+      } catch {
+        iceLoaded = null;
+      }
+    })();
+  }
+  return iceLoaded ?? Promise.resolve();
+}
 
 export const callRef = (callId: string) => doc(db, "calls", callId);
 
@@ -225,7 +254,23 @@ function createTone(opts: {
             audio = new Audio(opts.uri());
             audio.loop = true;
             audio.volume = opts.volume;
-            audio.play().catch(() => startFallback());
+            const el = audio;
+            el.setAttribute("playsinline", "");
+            el.play().catch(() => {
+              startFallback();
+              // Retry the real ringtone on the next touch (autoplay policy).
+              const retry = () => {
+                window.removeEventListener("pointerdown", retry);
+                if (!running || audio !== el) return;
+                el.play()
+                  .then(() => {
+                    if (timer) clearInterval(timer);
+                    timer = null;
+                  })
+                  .catch(() => {});
+              };
+              window.addEventListener("pointerdown", retry, { once: true });
+            });
           } else {
             startFallback();
           }

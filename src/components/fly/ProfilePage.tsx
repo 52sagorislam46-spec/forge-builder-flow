@@ -16,12 +16,14 @@ import { EditProfilePage } from "./EditProfilePage";
 import { MembersPage } from "./MembersPage";
 import { CreatorDashboardPage } from "./CreatorDashboardPage";
 import { WalletPage } from "./WalletPage";
+import { FlyAIPage } from "./FlyAIPage";
+import { HelpCenterPage } from "./HelpCenterPage";
 import { WithdrawalRequestsPage } from "./WithdrawalRequestsPage";
 import { BoostRequestsPage } from "./BoostRequestsPage";
 import { MonetizationPanel } from "./MonetizationPanel";
 import { BadgeDollarSign } from "lucide-react";
 import { Rocket } from "lucide-react";
-import { Wallet, Crown, Sprout } from "lucide-react";
+import { Wallet, Crown, Sprout, Bot, LifeBuoy } from "lucide-react";
 import { isVipOf, VIP_DAYS, vipFeeOf, subscribeVip, INSUFFICIENT_MSG, VIP_MIN_FEE, VIP_MAX_FEE, VIP_FEE_PLANS, hasFeeAccess, buyFeePlan } from "./vip";
 import { useDarkMode } from "./theme";
 import { isAdmin } from "./admins";
@@ -50,6 +52,8 @@ export function ProfilePage({
   const [showMembers, setShowMembers] = useState(false);
   const [showCreatorDashboard, setShowCreatorDashboard] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
+  const [showAI, setShowAI] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [showWithdrawals, setShowWithdrawals] = useState(false);
   const [showBoosts, setShowBoosts] = useState(false);
   const [showMonetization, setShowMonetization] = useState(false);
@@ -62,6 +66,8 @@ export function ProfilePage({
   useBackClose(showMembers, () => setShowMembers(false));
   useBackClose(showCreatorDashboard, () => setShowCreatorDashboard(false));
   useBackClose(showWallet, () => setShowWallet(false));
+  useBackClose(showAI, () => setShowAI(false));
+  useBackClose(showHelp, () => setShowHelp(false));
   useBackClose(showWithdrawals, () => setShowWithdrawals(false));
   useBackClose(showBoosts, () => setShowBoosts(false));
   useBackClose(showMonetization, () => setShowMonetization(false));
@@ -286,6 +292,28 @@ export function ProfilePage({
     return <MembersPage onBack={() => setShowMembers(false)} />;
   }
 
+  if (showAI && isMe) {
+    return (
+      <FlyAIPage
+        onBack={() => window.history.back()}
+        onOpenChat={(p) => {
+          setShowAI(false);
+          setShowHelp(false);
+          onOpenChat(p);
+        }}
+      />
+    );
+  }
+
+  if (showHelp && isMe) {
+    return (
+      <HelpCenterPage
+        onBack={() => window.history.back()}
+        onOpenAI={() => setShowAI(true)}
+      />
+    );
+  }
+
   if (showWallet && isMe) {
     return <WalletPage onBack={() => setShowWallet(false)} />;
   }
@@ -368,6 +396,26 @@ export function ProfilePage({
               >
                 <BadgeCheck size={20} className="text-gray-500" />
                 <span className="text-sm font-medium">Creator Dashboard</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  setShowAI(true);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left text-gray-800 hover:bg-gray-50"
+              >
+                <Bot size={20} className="text-gray-500" />
+                <span className="text-sm font-medium">Fly AI</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  setShowHelp(true);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left text-gray-800 hover:bg-gray-50"
+              >
+                <LifeBuoy size={20} className="text-gray-500" />
+                <span className="text-sm font-medium">Help Center</span>
               </button>
               <a
                 href="/agro"

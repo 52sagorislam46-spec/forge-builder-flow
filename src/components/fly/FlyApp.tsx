@@ -211,6 +211,13 @@ function Shell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, tab, viewProfile, chatWith, groupChat, composing, searching, notifying, callHistory]);
 
+  /** On-screen back buttons behave exactly like the phone's back button. */
+  const goBackOr = (fallback: () => void) => {
+    const st = window.history.state as { flyNav?: boolean } | null;
+    if (st?.flyNav && window.history.length > 1) window.history.back();
+    else fallback();
+  };
+
   const openProfile = (uid: string) => {
     setChatWith(null);
     setGroupChat(null);
@@ -295,7 +302,7 @@ function Shell() {
       <div className="mx-auto w-full max-w-md bg-white">
         <ChatView
           other={chatWith}
-          onBack={() => setChatWith(null)}
+          onBack={() => goBackOr(() => setChatWith(null))}
           onOpenProfile={openProfile}
         />
 
@@ -308,7 +315,7 @@ function Shell() {
       <div className="mx-auto w-full max-w-md bg-white">
         <GroupChatView
           group={groupChat}
-          onBack={() => setGroupChat(null)}
+          onBack={() => goBackOr(() => setGroupChat(null))}
         />
       </div>
     );

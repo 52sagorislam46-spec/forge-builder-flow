@@ -53,6 +53,7 @@ import {
   createRingback,
   createRingtone,
   RTC_CONFIG,
+  ensureIceServers,
   setCallStatus,
   watchCall,
   waitForIceGathering,
@@ -495,6 +496,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   const buildPeer = useCallback(
     async (type: CallType, side: "caller" | "callee", callId: string) => {
+      await ensureIceServers();
       const pc = new RTCPeerConnection(RTC_CONFIG);
       pcRef.current = pc;
 
@@ -819,8 +821,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
       );
       unsubsRef.current.push(
           watchCall(data.id, (live) => {
+          // Caller hung up: close the call on this side right away, no
+          // matter if we are still ringing or already connecting.
           if (!live || live.status === "ended" || live.status === "rejected") {
-            if (phaseRef.current === "incoming") teardown();
+            if (callIdRef.current === data.id) teardown();
           }
         }),
       );
@@ -887,6 +891,24 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
 
   }, [call, buildPeer, listenRemoteCandidates, teardown, flushCandidates]);
+
+  /** Ringtone / ringback always follow the call phase (works for every path). */
+  useEffect(() => {
+    if (call && phase === "incoming") ringtoneRef.current?.start();
+    else ringtoneRef.current?.stop();
+    if (call && phase === "outgoing") ringbackRef.current?.start();
+    else ringbackRef.current?.stop();
+  }, [call, phase]);
+
+  /** Closing / reloading the app ends the call for the other side too. */
+  useEffect(() => {
+    const onHide = () => {
+      const id = callIdRef.current;
+      if (id) void setCallStatus(id, "ended").catch(() => {});
+    };
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
+  }, []);
 
   const reject = useCallback(() => teardown("rejected"), [teardown]);
   const hangUp = useCallback(() => teardown("ended"), [teardown]);
