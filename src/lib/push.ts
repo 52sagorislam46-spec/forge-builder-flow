@@ -33,7 +33,8 @@ const appId =
     | undefined) || APP_FIREBASE.appId;
 const vapidKey = import.meta.env[
   "VITE_LOVABLE_CONNECTOR_FIREBASE_MESSAGING_VAPID_KEY"
-] as string | undefined;
+] as string | undefined ||
+  "BPnEtE9ECtFKfnegyTCoO5rmRgQoRzFjfyRB2qR_WVwiml_ifVDEh9YDDIaTuqqlM5i5mmAljMgVsRjHMjNKLd8";
 
 const firebaseConfig = {
   apiKey:

@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import ReactMarkdown from "react-markdown";
-import { Bird, Camera, Carrot, Fish, ImagePlus, Loader2, Milk, RotateCcw, Send, Sprout, TreePine, X } from "lucide-react";
+import { Bird, Camera, Carrot, Fish, ImagePlus, Loader2, Milk, RotateCcw, Send, Mic, Sprout, TreePine, X } from "lucide-react";
 
 export const Route = createFileRoute("/agro")({
   head: () => ({
@@ -52,6 +52,48 @@ function Index() {
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [chat, setChat] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [follow, setFollow] = useState("");
+  const [listening, setListening] = useState(false);
+
+  const listen = (set: (t: string) => void) => {
+    const W = window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any };
+    const SR = W.SpeechRecognition ?? W.webkitSpeechRecognition;
+    if (!SR) { setError("এই ডিভাইসে ভয়েস ইনপুট সাপোর্ট করে না, লিখে প্রশ্ন করুন।"); return; }
+    const r = new SR();
+    r.lang = "bn-BD"; r.interimResults = false;
+    r.onresult = (e: any) => set(e.results[0][0].transcript as string);
+    r.onend = () => setListening(false);
+    r.onerror = () => setListening(false);
+    setListening(true); r.start();
+  };
+
+  const askFollow = async () => {
+    const q = follow.trim();
+    if (!q || !image || loading) return;
+    setFollow(""); setLoading(true); setError("");
+    const hist = [{ role: "assistant" as const, content: answer }, ...chat, { role: "user" as const, content: q }];
+    setChat((c) => [...c, { role: "user", content: q }, { role: "assistant", content: "" }]);
+    try {
+      const res = await fetch("/api/diagnose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image, question, category: category?.label, history: hist }),
+      });
+      if (!res.ok || !res.body) { setError(await res.text()); return; }
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let acc = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += dec.decode(value, { stream: true });
+        const snap = acc;
+        setChat((c) => { const n = [...c]; n[n.length - 1] = { role: "assistant", content: snap }; return n; });
+      }
+    } catch { setError("ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।"); }
+    finally { setLoading(false); }
+  };
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -98,7 +140,7 @@ function Index() {
     finally { setLoading(false); }
   };
 
-  const reset = () => { setImage(null); setAnswer(""); setQuestion(""); setError(""); };
+  const reset = () => { setImage(null); setAnswer(""); setQuestion(""); setError(""); setChat([]); setFollow(""); };
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-background pb-10">
@@ -181,10 +223,30 @@ function Index() {
               </div>
             )}
             {answer && (
-              <article className="prose-agro rounded-3xl bg-card p-5 shadow-sm ring-1 ring-border">
+              <article className="select-text prose-agro rounded-3xl bg-card p-5 shadow-sm ring-1 ring-border">
                 <ReactMarkdown>{answer}</ReactMarkdown>
-                {loading && <Loader2 className="mt-2 h-5 w-5 animate-spin text-primary" />}
+                {loading && !chat.length && <Loader2 className="mt-2 h-5 w-5 animate-spin text-primary" />}
               </article>
+            )}
+            {answer && chat.map((m, i) => (
+              <div key={i} className={m.role === "user" ? "ml-auto max-w-[85%] rounded-2xl bg-primary px-4 py-3 text-primary-foreground" : "prose-agro rounded-3xl bg-card p-5 shadow-sm ring-1 ring-border select-text"}>
+                {m.role === "user" ? m.content : m.content ? <ReactMarkdown>{m.content}</ReactMarkdown> : <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+              </div>
+            ))}
+            {answer && (
+              <div className="flex items-end gap-2">
+                <textarea value={follow} onChange={(e) => setFollow(e.target.value)} rows={1}
+                  placeholder="আরও প্রশ্ন করুন — যেমন: কতদিন পর পর স্প্রে করব?"
+                  className="flex-1 resize-none rounded-2xl border border-input bg-card p-3 text-base text-foreground outline-none focus:ring-2 focus:ring-ring" />
+                <button type="button" onClick={() => listen((t) => setFollow((f) => (f ? f + " " : "") + t))} aria-label="ভয়েসে প্রশ্ন"
+                  className={`tap-btn grid h-12 w-12 shrink-0 place-items-center rounded-full ${listening ? "bg-destructive text-destructive-foreground animate-pulse" : "bg-secondary text-secondary-foreground"}`}>
+                  <Mic className="h-5 w-5" />
+                </button>
+                <button type="button" onClick={askFollow} disabled={loading || !follow.trim()} aria-label="পাঠান"
+                  className="tap-btn grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-50">
+                  <Send className="h-5 w-5" />
+                </button>
+              </div>
             )}
             <button type="button" onClick={reset} disabled={loading}
               className="tap-btn flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-primary py-4 text-lg font-semibold text-primary disabled:opacity-50">

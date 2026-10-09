@@ -34,5 +34,17 @@ export const getIceServers = createServerFn({ method: "GET" }).handler(async () 
       credential: process.env["TURN_CREDENTIAL"] ?? "",
     });
   }
+  if (!out.length) {
+    // Built-in Metered relay (fly.metered.live) so calls work on any network.
+    const username = "b0a51fef98435887eb20a23a";
+    const credential = "SkfJFOAbWhkEt5Ex";
+    out.push(
+      { urls: "stun:stun.relay.metered.ca:80" },
+      { urls: "turn:global.relay.metered.ca:80", username, credential },
+      { urls: "turn:global.relay.metered.ca:80?transport=tcp", username, credential },
+      { urls: "turn:global.relay.metered.ca:443", username, credential },
+      { urls: "turns:global.relay.metered.ca:443?transport=tcp", username, credential },
+    );
+  }
   return { iceServers: out };
 });
