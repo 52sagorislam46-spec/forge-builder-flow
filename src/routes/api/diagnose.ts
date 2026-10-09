@@ -12,13 +12,17 @@ const SYSTEM = `তুমি "Fly Agro" — বাংলাদেশের ক�
 ## 🛡️ প্রতিরোধে করণীয়
 ## ⚠️ সতর্কতা
 (ঔষধ ব্যবহারে সাবধানতা; প্রয়োজনে নিকটস্থ উপজেলা কৃষি অফিস / প্রাণিসম্পদ অফিস / মৎস্য অফিস বা কৃষি কল সেন্টার ১৬১২৩ এ যোগাযোগের পরামর্শ)
-ছবি সুস্থ হলে সেটা বলো এবং যত্নের পরামর্শ দাও। ছবি অস্পষ্ট হলে আরেকটি পরিষ্কার ছবি চাও। কৃষি-বহির্ভূত কিছু হলে শনাক্ত করে সংক্ষেপে প্রয়োজনীয় তথ্য দাও।`;
+ছবি সুস্থ হলে সেটা বলো এবং যত্নের পরামর্শ দাও। ছবি সাধারণ মানের বা একটু অস্পষ্ট হলেও কখনো "আরও পরিষ্কার ছবি দিন" বলে উত্তর এড়াবে না — যা দেখা যাচ্ছে তা থেকে আত্মবিশ্বাসের সাথে সবচেয়ে সম্ভাব্য শনাক্তকরণ ও রোগ বলবে (প্রয়োজনে ২-৩টি সম্ভাব্য রোগ শতাংশসহ)।
+সবশেষে অবশ্যই থাকবে:
+## 📚 সূত্র ও প্রমাণ
+(তথ্যের নির্ভরযোগ্য উৎস লিংকসহ — যেমন BARI http://www.bari.gov.bd, BRRI http://www.brri.gov.bd, কৃষি সম্প্রসারণ অধিদপ্তর http://www.dae.gov.bd, প্রাণিসম্পদ অধিদপ্তর http://www.dls.gov.bd, মৎস্য অধিদপ্তর http://www.fisheries.gov.bd, IRRI Rice Knowledge Bank, FAO, CABI Plantwise — শুধু প্রাসঙ্গিকগুলো; বানানো লিংক দেবে না) এবং কৃষি কল সেন্টার ১৬১২৩।
+অনুসরণমূলক প্রশ্নে আগের আলোচনা মনে রেখে সংক্ষেপে ও নির্দিষ্টভাবে উত্তর দাও। কৃষি-বহির্ভূত কিছু হলে শনাক্ত করে সংক্ষেপে প্রয়োজনীয় তথ্য দাও।`;
 
 export const Route = createFileRoute("/api/diagnose")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const { image, question, category } = (await request.json()) as { image?: string; question?: string; category?: string };
+        const { image, question, category, history } = (await request.json()) as { image?: string; question?: string; category?: string; history?: Array<{ role: "user" | "assistant"; content: string }> };
         if (!image || !image.startsWith("data:image/")) {
           return new Response("একটি ছবি দিন।", { status: 400 });
         }
@@ -37,7 +41,7 @@ export const Route = createFileRoute("/api/diagnose")({
             model: "openai/gpt-6-astra",
             stream: true,
             store: false,
-            reasoning: { effort: "low" },
+            reasoning: { effort: "medium" },
             instructions: SYSTEM,
             input: [
               {
@@ -55,6 +59,10 @@ export const Route = createFileRoute("/api/diagnose")({
                   { type: "input_image", image_url: image },
                 ],
               },
+              ...(history ?? [])
+                .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+                .slice(-12)
+                .map((m) => ({ role: m.role, content: m.content.slice(0, 6000) })),
             ],
           }),
         });

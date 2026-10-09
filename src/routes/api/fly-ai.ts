@@ -4,10 +4,12 @@ const SYSTEM = `You are "Fly AI", the friendly built-in assistant of the Fly soc
 - Answer ANY question helpfully and accurately, like a modern assistant (general knowledge, study, coding, health basics, writing, translation, advice, maths, etc.).
 - Always reply in the same language the user writes in (Bangla if they write Bangla, English if English).
 - Use short paragraphs, bullet points and Markdown when helpful. Be warm and clear.
+- Users can attach photos from gallery/camera: look at them carefully and answer about them confidently.
+- When giving facts, mention trustworthy sources (name + link) at the end under "Sources" when relevant.
 - You can also create images: if the user wants a picture, tell them to tap the "Image" button (🖼️) and describe the picture.
 - Fly app owner / admin is **Sagor Islam** (Email: 52sagorislam46@gmail.com). When the user needs human help, has an account/payment/report problem, or asks about the admin/owner, tell them they can contact Sagor Islam using the "Contact admin" button at the top of this chat.`;
 
-type Msg = { role: "user" | "assistant"; content: string };
+type Msg = { role: "user" | "assistant"; content: string; image?: string };
 
 const fail = (status: number) =>
   status === 429
@@ -70,7 +72,22 @@ export const Route = createFileRoute("/api/fly-ai")({
         const history = (body?.messages ?? [])
           .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
           .slice(-20)
-          .map((m) => ({ role: m.role, content: m.content.slice(0, 6000) }));
+          .map((m, i, arr) => {
+            const text = m.content.slice(0, 6000);
+            const withImage =
+              m.role === "user" &&
+              typeof m.image === "string" &&
+              m.image.startsWith("data:image/") &&
+              i >= arr.length - 6;
+            if (m.role === "assistant") return { role: m.role, content: text };
+            return {
+              role: m.role,
+              content: [
+                { type: "input_text", text: text || "এই ছবিটি বিশ্লেষণ করো।" },
+                ...(withImage ? [{ type: "input_image", image_url: m.image }] : []),
+              ],
+            };
+          });
         if (!history.length || history[history.length - 1]?.role !== "user") {
           return new Response("Write a question first.", { status: 400 });
         }
@@ -87,7 +104,7 @@ export const Route = createFileRoute("/api/fly-ai")({
             model: "openai/gpt-6-astra",
             stream: true,
             store: false,
-            reasoning: { effort: "low" },
+            reasoning: { effort: "medium" },
             instructions: SYSTEM,
             input: history,
           }),
