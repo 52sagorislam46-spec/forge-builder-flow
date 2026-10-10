@@ -73,6 +73,8 @@ export interface Story {
   authorPhoto: string;
   mediaUrl: string;
   mediaType: string;
+  musicUrl?: string;
+  musicName?: string;
   createdAt: number;
   reactions?: Record<string, string>;
 }
