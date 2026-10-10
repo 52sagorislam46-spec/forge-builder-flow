@@ -57,6 +57,7 @@ export function FlyAIPage({
   const [adminBusy, setAdminBusy] = useState(false);
   const [attach, setAttach] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
+  const [voiceSend, setVoiceSend] = useState(false);
   const [menu, setMenu] = useState<number | null>(null);
   const [toast, setToast] = useState("");
   const galRef = useRef<HTMLInputElement>(null);
@@ -81,16 +82,22 @@ export function FlyAIPage({
     r.interimResults = true;
     r.continuous = false;
     const base = text ? text + " " : "";
+    let heard = false;
     r.onresult = (e: any) => {
       let t = "";
       for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      if (t.trim()) heard = true;
       setText(base + t);
     };
-    r.onend = () => setListening(false);
-    r.onerror = () => { setListening(false); flash("মাইক্রোফোন চালু করা যায়নি"); };
+    r.onend = () => { setListening(false); if (heard) setVoiceSend(true); };
+    r.onerror = (ev: any) => {
+      setListening(false);
+      if (ev?.error === "no-speech") flash("কোনো কথা শোনা যায়নি, আবার বলুন");
+      else if (ev?.error !== "aborted") flash("মাইক্রোফোন চালু করা যায়নি — অনুমতি দিন");
+    };
     recRef.current = r;
     setListening(true);
-    r.start();
+    try { r.start(); } catch { setListening(false); flash("মাইক্রোফোন চালু করা যায়নি"); }
   };
 
   const copyMsg = async (i: number) => {
@@ -118,6 +125,13 @@ export function FlyAIPage({
   }, [items]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  useEffect(() => {
+    if (!voiceSend) return;
+    setVoiceSend(false);
+    if (text.trim() && !busy) void send();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceSend]);
 
   const contactAdmin = async () => {
     setAdminBusy(true);
@@ -194,7 +208,7 @@ export function FlyAIPage({
   };
 
   return (
-    <div className="relative flex flex-col h-[100dvh] overflow-hidden bg-white">
+    <div className="fixed inset-0 z-50 mx-auto w-full max-w-md flex flex-col h-[100dvh] overflow-hidden bg-white">
       <header className="flex items-center gap-3 px-4 h-14 border-b border-gray-100 bg-white">
         <button onClick={onBack} aria-label="Back" className="text-gray-500">
           <ArrowLeft size={22} />
