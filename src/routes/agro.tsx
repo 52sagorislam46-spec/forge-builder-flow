@@ -56,17 +56,31 @@ function Index() {
   const [follow, setFollow] = useState("");
   const [listening, setListening] = useState(false);
 
+  const [voiceSend, setVoiceSend] = useState(false);
   const listen = (set: (t: string) => void) => {
     const W = window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any };
     const SR = W.SpeechRecognition ?? W.webkitSpeechRecognition;
     if (!SR) { setError("এই ডিভাইসে ভয়েস ইনপুট সাপোর্ট করে না, লিখে প্রশ্ন করুন।"); return; }
     const r = new SR();
     r.lang = "bn-BD"; r.interimResults = false;
-    r.onresult = (e: any) => set(e.results[0][0].transcript as string);
-    r.onend = () => setListening(false);
-    r.onerror = () => setListening(false);
-    setListening(true); r.start();
+    let heard = false;
+    r.onresult = (e: any) => { const t = e.results[0][0].transcript as string; if (t.trim()) { heard = true; set(t); } };
+    r.onend = () => { setListening(false); if (heard) setVoiceSend(true); };
+    r.onerror = (ev: any) => {
+      setListening(false);
+      if (ev?.error === "no-speech") setError("কোনো কথা শোনা যায়নি, আবার বলুন।");
+      else if (ev?.error !== "aborted") setError("মাইক্রোফোন চালু করা যায়নি — অনুমতি দিন।");
+    };
+    setListening(true);
+    try { r.start(); } catch { setListening(false); }
   };
+
+  useEffect(() => {
+    if (!voiceSend) return;
+    setVoiceSend(false);
+    void askFollow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceSend]);
 
   const askFollow = async () => {
     const q = follow.trim();
@@ -248,6 +262,16 @@ function Index() {
                 </button>
               </div>
             )}
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" disabled={loading} onClick={() => { reset(); camRef.current?.click(); }}
+                className="tap-btn flex items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground disabled:opacity-50">
+                <Camera className="h-5 w-5" /> ক্যামেরা
+              </button>
+              <button type="button" disabled={loading} onClick={() => { reset(); galRef.current?.click(); }}
+                className="tap-btn flex items-center justify-center gap-2 rounded-2xl border-2 border-primary py-4 text-base font-bold text-primary disabled:opacity-50">
+                <ImagePlus className="h-5 w-5" /> গ্যালারি থেকে
+              </button>
+            </div>
             <button type="button" onClick={reset} disabled={loading}
               className="tap-btn flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-primary py-4 text-lg font-semibold text-primary disabled:opacity-50">
               <RotateCcw className="h-5 w-5" /> নতুন ছবি দিন

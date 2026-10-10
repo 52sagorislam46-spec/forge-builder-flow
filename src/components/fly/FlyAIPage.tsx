@@ -57,6 +57,7 @@ export function FlyAIPage({
   const [adminBusy, setAdminBusy] = useState(false);
   const [attach, setAttach] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
+  const [voiceSend, setVoiceSend] = useState(false);
   const [menu, setMenu] = useState<number | null>(null);
   const [toast, setToast] = useState("");
   const galRef = useRef<HTMLInputElement>(null);
