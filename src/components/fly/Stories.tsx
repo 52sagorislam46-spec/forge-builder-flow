@@ -3,7 +3,10 @@ import {
   Download,
   Flag,
   Heart,
+  Camera,
+  CopyCheck,
   ImagePlus,
+  Music,
   Link2,
   Loader2,
   MoreVertical,
@@ -85,6 +88,8 @@ function useStories() {
                 authorPhoto: data.authorPhoto ?? "",
                 mediaUrl: data.mediaUrl ?? "",
                 mediaType: data.mediaType ?? "image",
+                musicUrl: data.musicUrl ?? "",
+                musicName: data.musicName ?? "",
                 createdAt: toMillis(data.createdAt),
                 reactions: (data.reactions as Record<string, string>) ?? {},
               } as Story;
@@ -107,112 +112,388 @@ interface StoryGroup {
   stories: Story[];
 }
 
+const TEXT_BGS = [
+  "linear-gradient(135deg,#f97316,#ec4899)",
+  "linear-gradient(135deg,#0ea5e9,#6366f1)",
+  "linear-gradient(135deg,#a855f7,#ec4899)",
+  "linear-gradient(135deg,#059669,#84cc16)",
+  "linear-gradient(135deg,#111827,#4b5563)",
+  "linear-gradient(135deg,#f43f5e,#fbbf24)",
+];
+const TEXT_BG_STOPS: [string, string][] = [
+  ["#f97316", "#ec4899"],
+  ["#0ea5e9", "#6366f1"],
+  ["#a855f7", "#ec4899"],
+  ["#059669", "#84cc16"],
+  ["#111827", "#4b5563"],
+  ["#f43f5e", "#fbbf24"],
+];
+
+function wrapLines(ctx: CanvasRenderingContext2D, text: string, max: number) {
+  const out: string[] = [];
+  for (const para of text.split("\n")) {
+    let line = "";
+    for (const w of para.split(" ")) {
+      const t = line ? `${line} ${w}` : w;
+      if (ctx.measureText(t).width > max && line) {
+        out.push(line);
+        line = w;
+      } else line = t;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+/** Renders a text story (or a photo with a caption) into a 1080x1920 JPEG. */
+async function renderStoryImage(text: string, bgIdx: number, photo?: File): Promise<File> {
+  const W = 1080, H = 1920;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d")!;
+  if (photo) {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W, H);
+    const img = new Image();
+    img.src = URL.createObjectURL(photo);
+    await img.decode();
+    const s = Math.min(W / img.width, H / img.height);
+    const w = img.width * s, h = img.height * s;
+    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+  } else {
+    const [a, b] = TEXT_BG_STOPS[bgIdx]!;
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, a);
+    g.addColorStop(1, b);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (text.trim()) {
+    const size = photo ? 64 : text.length > 120 ? 70 : 96;
+    ctx.font = `bold ${size}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const lines = wrapLines(ctx, text.trim(), W - 160);
+    const lh = size * 1.3;
+    const startY = (photo ? H * 0.78 : H / 2) - ((lines.length - 1) * lh) / 2;
+    lines.forEach((l, i) => {
+      const y = startY + i * lh;
+      if (photo) {
+        const tw = ctx.measureText(l).width;
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.fillRect(W / 2 - tw / 2 - 24, y - lh / 2, tw + 48, lh);
+      }
+      ctx.fillStyle = "#fff";
+      ctx.fillText(l, W / 2, y);
+    });
+  }
+  const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), "image/jpeg", 0.9));
+  return new File([blob], "story.jpg", { type: "image/jpeg" });
+}
+
 function AddStoryModal({ onClose }: { onClose: () => void }) {
   const { ensureUserProfile } = useAuth();
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<"pick" | "text" | "media">("pick");
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [idx, setIdx] = useState(0);
+  const [text, setText] = useState("");
+  const [bg, setBg] = useState(0);
+  const [music, setMusic] = useState<File | null>(null);
+  const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [gallery, setGallery] = useState<{ file: File; url: string }[]>([]);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [multi, setMulti] = useState(false);
+  const [durations, setDurations] = useState<Record<number, number>>({});
 
-  const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] ?? null;
-    setFile(f);
-    setPreview(f ? URL.createObjectURL(f) : "");
+  const loadGallery = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (!list.length) return;
+    const items = list.map((file) => ({ file, url: URL.createObjectURL(file) }));
+    if (!multi && items.length === 1) {
+      useFiles(items.map((i) => i.file));
+      return;
+    }
+    setGallery((g) => [...items, ...g]);
+    setMulti(true);
+  };
+
+  const useFiles = (list: File[]) => {
+    setFiles(list);
+    setPreviews(list.map((f) => URL.createObjectURL(f)));
+    setIdx(0);
+    setMode("media");
+  };
+
+  const toggleSel = (i: number) => {
+    if (!multi) {
+      useFiles([gallery[i]!.file]);
+      return;
+    }
+    setSelected((s) => (s.includes(i) ? s.filter((x) => x !== i) : [...s, i]));
   };
 
   const submit = async () => {
-    if (!file) return;
-    setBusy(true);
+    setBusy("Uploading…");
     setError("");
     try {
       const profile = await ensureUserProfile();
-      const uploaded = await uploadToCloudinary(file);
-      const storyMediaType =
-        uploaded.resourceType || (isVideoFile(file) ? "video" : "image");
-      await addDoc(collection(db, "stories"), {
-        authorId: profile.uid,
-        authorName: profile.displayName,
-        authorUsername: profile.username,
-        authorPhoto: profile.photoURL,
-        mediaUrl: uploaded.url,
-        mediaType: storyMediaType,
-        createdAt: serverTimestamp(),
-      });
-      void notifyUpload({
-        type: "story",
-        actorId: profile.uid,
-        actorName: profile.displayName,
-        actorPhoto: profile.photoURL,
-        followers: profile.followers,
-        mediaUrl: storyMediaType === "image" ? uploaded.url : "",
-      });
+      let musicUrl = "";
+      if (music) {
+        setBusy("Uploading music…");
+        musicUrl = (await uploadToCloudinary(music)).url;
+      }
+      const toUpload: File[] =
+        mode === "text"
+          ? [await renderStoryImage(text, bg)]
+          : await Promise.all(
+              files.map((f, i) =>
+                i === 0 && text.trim() && !isVideoFile(f)
+                  ? renderStoryImage(text, bg, f)
+                  : Promise.resolve(f),
+              ),
+            );
+      for (let i = 0; i < toUpload.length; i++) {
+        const f = toUpload[i]!;
+        setBusy(`Uploading ${i + 1}/${toUpload.length}…`);
+        const uploaded = await uploadToCloudinary(f);
+        const storyMediaType =
+          uploaded.resourceType || (isVideoFile(f) ? "video" : "image");
+        await addDoc(collection(db, "stories"), {
+          authorId: profile.uid,
+          authorName: profile.displayName,
+          authorUsername: profile.username,
+          authorPhoto: profile.photoURL,
+          mediaUrl: uploaded.url,
+          mediaType: storyMediaType,
+          musicUrl,
+          musicName: music?.name ?? "",
+          createdAt: serverTimestamp(),
+        });
+        if (i === 0)
+          void notifyUpload({
+            type: "story",
+            actorId: profile.uid,
+            actorName: profile.displayName,
+            actorPhoto: profile.photoURL,
+            followers: profile.followers,
+            mediaUrl: storyMediaType === "image" ? uploaded.url : "",
+          });
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add story");
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center">
-      <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-900">Add to story</h2>
-          <button onClick={onClose} className="text-gray-400" aria-label="Close">
-            <X size={22} />
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+  const musicInput = (
+    <label className="flex items-center gap-2 px-3 h-9 rounded-full bg-white/20 text-white text-xs font-semibold cursor-pointer">
+      <Music size={16} />
+      <span className="max-w-[140px] truncate">{music ? music.name : "Music"}</span>
+      <input
+        type="file"
+        accept="audio/*"
+        className="hidden"
+        onChange={(e) => setMusic(e.target.files?.[0] ?? null)}
+      />
+    </label>
+  );
+
+  if (mode === "text" || mode === "media") {
+    const cur = files[idx];
+    return (
+      <div className="fixed inset-0 z-[60] bg-black flex flex-col">
+        <div className="flex items-center justify-between p-3">
+          <button
+            onClick={() => (mode === "text" ? setMode("pick") : setMode("pick"))}
+            className="text-white"
+            aria-label="Back"
+          >
+            <X size={26} />
           </button>
-        </div>
-        {preview ? (
-          <div className="rounded-2xl overflow-hidden bg-gray-100 max-h-80">
-            {file && isVideoFile(file) ? (
-              <video src={preview} controls className="w-full max-h-80" />
-            ) : (
-              <img src={preview} alt="story preview" className="w-full object-cover" />
+          <div className="flex gap-2">
+            {musicInput}
+            {music && (
+              <button onClick={() => setMusic(null)} className="text-white/70 text-xs">
+                Remove
+              </button>
             )}
           </div>
-        ) : (
-          <label className="flex flex-col items-center justify-center gap-2 h-48 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 cursor-pointer active:bg-gray-50">
-            <ImagePlus size={32} />
-            <span className="text-sm">Choose photo or video</span>
-            <input
-              type="file"
-              accept="image/*,video/*"
-              onChange={pick}
-              className="hidden"
+        </div>
+        <div
+          className="flex-1 mx-3 rounded-2xl overflow-hidden relative flex items-center justify-center"
+          style={{ background: mode === "text" ? TEXT_BGS[bg] : "#000" }}
+        >
+          {mode === "media" && cur &&
+            (isVideoFile(cur) ? (
+              <video src={previews[idx]} controls className="max-h-full max-w-full" />
+            ) : (
+              <img src={previews[idx]} alt="preview" className="max-h-full max-w-full object-contain" />
+            ))}
+          {(mode === "text" || (cur && !isVideoFile(cur) && idx === 0)) && (
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={mode === "text" ? "Start typing" : "Add text…"}
+              className={`absolute inset-x-4 bg-transparent text-white text-center font-bold outline-none resize-none placeholder:text-white/60 ${
+                mode === "text" ? "top-1/3 text-3xl h-1/3" : "bottom-6 text-xl h-24 [text-shadow:0_1px_4px_rgba(0,0,0,.8)]"
+              }`}
             />
-          </label>
-        )}
-        {error && (
-          <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2 mt-3">
-            {error}
-          </p>
-        )}
-        <div className="flex items-center justify-between mt-4">
-          {preview ? (
-            <label className="flex items-center gap-2 text-sky-500 font-medium cursor-pointer">
-              <ImagePlus size={20} />
-              <span className="text-sm">Change</span>
-              <input
-                type="file"
-                accept="image/*,video/*"
-                onChange={pick}
-                className="hidden"
-              />
-            </label>
-          ) : (
-            <span />
           )}
+          {files.length > 1 && (
+            <div className="absolute top-2 inset-x-0 flex justify-center gap-1">
+              {files.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setIdx(i)}
+                  className={`w-2 h-2 rounded-full ${i === idx ? "bg-white" : "bg-white/40"}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+        {mode === "text" && (
+          <div className="flex gap-2 justify-center py-3">
+            {TEXT_BGS.map((b, i) => (
+              <button
+                key={i}
+                onClick={() => setBg(i)}
+                className={`w-8 h-8 rounded-full ${bg === i ? "ring-2 ring-white" : ""}`}
+                style={{ background: b }}
+              />
+            ))}
+          </div>
+        )}
+        {error && <p className="text-sm text-red-300 text-center px-4">{error}</p>}
+        <div className="p-3 flex justify-end">
           <button
             onClick={submit}
-            disabled={busy || !file}
-            className="h-10 px-6 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold flex items-center gap-2 disabled:opacity-50"
+            disabled={!!busy || (mode === "text" && !text.trim())}
+            className="h-11 px-6 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold flex items-center gap-2 disabled:opacity-50"
           >
             {busy && <Loader2 size={16} className="animate-spin" />}
-            Share story
+            {busy || (files.length > 1 ? `Share ${files.length} stories` : "Share to story")}
           </button>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-white flex flex-col">
+      <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100">
+        <button onClick={onClose} className="text-gray-700" aria-label="Close">
+          <X size={24} />
+        </button>
+        <h2 className="text-base font-bold text-gray-900">Create story</h2>
+        <span className="w-6" />
+      </div>
+      <div className="grid grid-cols-3 gap-2 p-3">
+        <button
+          onClick={() => setMode("text")}
+          className="h-32 rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 text-white flex flex-col items-center justify-center gap-2"
+        >
+          <span className="w-10 h-10 rounded-full bg-white/25 flex items-center justify-center font-bold">Aa</span>
+          <span className="text-sm font-semibold">Text</span>
+        </button>
+        <label className="h-32 rounded-2xl bg-gradient-to-br from-pink-500 to-orange-400 text-white flex flex-col items-center justify-center gap-2 cursor-pointer">
+          <span className="w-10 h-10 rounded-full bg-white/25 flex items-center justify-center"><Music size={20} /></span>
+          <span className="text-sm font-semibold">Music</span>
+          <input
+            type="file"
+            accept="audio/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) {
+                setMusic(f);
+                setMode("text");
+              }
+            }}
+          />
+        </label>
+        <label className="h-32 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white flex flex-col items-center justify-center gap-2 cursor-pointer">
+          <span className="w-10 h-10 rounded-full bg-white/25 flex items-center justify-center"><Camera size={20} /></span>
+          <span className="text-sm font-semibold">Camera</span>
+          <input
+            type="file"
+            accept="image/*,video/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) useFiles([f]);
+            }}
+          />
+        </label>
+      </div>
+      <div className="flex items-center justify-between px-4 py-2">
+        <span className="font-semibold text-gray-900">Gallery</span>
+        <button
+          onClick={() => {
+            setMulti((m) => !m);
+            setSelected([]);
+          }}
+          className={`flex items-center gap-1 text-sm font-semibold px-3 h-8 rounded-full ${multi ? "bg-sky-500 text-white" : "bg-gray-100 text-gray-700"}`}
+        >
+          <CopyCheck size={16} /> Select multiple
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto grid grid-cols-3 gap-0.5 content-start">
+        <label className="aspect-[3/4] bg-gray-100 flex flex-col items-center justify-center gap-1 text-gray-500 cursor-pointer">
+          <ImagePlus size={28} />
+          <span className="text-xs">Open gallery</span>
+          <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={loadGallery} />
+        </label>
+        {gallery.map((g, i) => {
+          const pos = selected.indexOf(i);
+          return (
+            <button key={g.url} onClick={() => toggleSel(i)} className="relative aspect-[3/4] bg-black overflow-hidden">
+              {isVideoFile(g.file) ? (
+                <video
+                  src={g.url}
+                  muted
+                  preload="metadata"
+                  className="w-full h-full object-cover"
+                  onLoadedMetadata={(e) => {
+                    const d = e.currentTarget.duration;
+                    setDurations((p) => ({ ...p, [i]: d }));
+                  }}
+                />
+              ) : (
+                <img src={g.url} alt="" className="w-full h-full object-cover" />
+              )}
+              {isVideoFile(g.file) && durations[i] != null && (
+                <span className="absolute bottom-1 right-1 text-[10px] font-semibold text-white bg-black/50 rounded px-1">
+                  {fmt(durations[i]!)}
+                </span>
+              )}
+              {multi && (
+                <span className={`absolute top-1 right-1 w-6 h-6 rounded-full border-2 border-white text-xs font-bold flex items-center justify-center ${pos >= 0 ? "bg-sky-500 text-white" : "bg-black/30"}`}>
+                  {pos >= 0 ? pos + 1 : ""}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {multi && selected.length > 0 && (
+        <div className="p-3 border-t border-gray-100">
+          <button
+            onClick={() => useFiles(selected.map((i) => gallery[i]!.file))}
+            className="w-full h-11 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold"
+          >
+            Next ({selected.length})
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -579,6 +860,14 @@ function StoryViewer({
 
 
         {/* media */}
+        {story.musicUrl && (
+          <audio key={story.id} src={secureUrl(story.musicUrl)} autoPlay loop className="hidden" />
+        )}
+        {story.musicUrl && (
+          <div className="absolute top-16 left-3 z-20 flex items-center gap-1 text-white text-xs bg-black/40 rounded-full px-2 py-1 max-w-[70%]">
+            <Music size={12} /> <span className="truncate">{story.musicName || "Music"}</span>
+          </div>
+        )}
         {story.mediaType === "video" ? (
           <video
             ref={videoRef}
