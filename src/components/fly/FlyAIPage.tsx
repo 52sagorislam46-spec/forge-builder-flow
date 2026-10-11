@@ -248,7 +248,7 @@ export function FlyAIPage({
           <div key={i} className={`relative flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
             <div
               // Long-press must stay free for the phone's own drag-to-select + Copy.
-              style={{ WebkitUserSelect: "text", userSelect: "text", WebkitTouchCallout: "default" } as React.CSSProperties}
+              style={{ WebkitUserSelect: "text", userSelect: "text", WebkitTouchCallout: "default" } as Record<string, string>}
               className={`select-text max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${
                 m.role === "user"
                   ? "bg-sky-500 text-white rounded-br-md whitespace-pre-wrap"
