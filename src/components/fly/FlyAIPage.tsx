@@ -160,7 +160,7 @@ export function FlyAIPage({
     try {
       const wantsEdit =
         !!img &&
-        /(edit|change|remove|add|make|convert|background|ইডিট|এডিট|সম্পাদনা|বদল|পরিবর্তন|মুছ|সরিয়|সরাও|যোগ কর|বানাও|বানিয়ে|কর[ে]? দাও|ব্যাকগ্রাউন্ড|রং)/i.test(text);
+        /(edit|change|remove|add|make|convert|background|ইডিট|এডিট|সম্পাদনা|বদল|পরিবর্তন|মুছ|সরিয়|সরাও|যোগ কর|বানিয়ে দাও|ব্যাকগ্রাউন্ড|রং)/i.test(text);
       if (imageMode || wantsEdit) {
         const res = await fetch("/api/fly-ai", {
           method: "POST",
