@@ -158,11 +158,14 @@ export function FlyAIPage({
     const history: Item[] = [...items, img ? { role: "user" as const, content: q, image: img } : { role: "user" as const, content: q }];
     setItems(history);
     try {
-      if (imageMode && !img) {
+      const wantsEdit =
+        !!img &&
+        /(edit|change|remove|add|make|convert|background|ইডিট|এডিট|সম্পাদনা|বদল|পরিবর্তন|মুছ|সরিয়|সরাও|যোগ কর|বানাও|বানিয়ে|কর[ে]? দাও|ব্যাকগ্রাউন্ড|রং)/i.test(text);
+      if (imageMode || wantsEdit) {
         const res = await fetch("/api/fly-ai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode: "image", prompt: q }),
+          body: JSON.stringify({ mode: "image", prompt: q, image: img ?? undefined }),
           signal: ctrl.signal,
         });
         const data = (await res.json().catch(() => ({}))) as { image?: string; text?: string; error?: string };
@@ -244,8 +247,8 @@ export function FlyAIPage({
         {items.map((m, i) => (
           <div key={i} className={`relative flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
             <div
-              onContextMenu={(e) => { e.preventDefault(); setMenu(menu === i ? null : i); }}
-              onDoubleClick={() => setMenu(menu === i ? null : i)}
+              // Long-press must stay free for the phone's own drag-to-select + Copy.
+              style={{ WebkitUserSelect: "text", userSelect: "text", WebkitTouchCallout: "default" } as React.CSSProperties}
               className={`select-text max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${
                 m.role === "user"
                   ? "bg-sky-500 text-white rounded-br-md whitespace-pre-wrap"
