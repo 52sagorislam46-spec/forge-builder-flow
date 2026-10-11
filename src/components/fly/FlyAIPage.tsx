@@ -169,7 +169,7 @@ export function FlyAIPage({
           signal: ctrl.signal,
         });
         const data = (await res.json().catch(() => ({}))) as { image?: string; text?: string; error?: string };
-        const img = data.image;
+        const outImg = data.image;
         if (!res.ok || !img) throw new Error(data.error ?? "Could not create the image.");
         setItems((p) => [...p, { role: "assistant", content: data.text ?? "", image: img }]);
         return;
