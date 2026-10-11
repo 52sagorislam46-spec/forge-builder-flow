@@ -61,17 +61,11 @@ interface RemoteEntry {
 }
 
 async function getMedia(type: CallType): Promise<MediaStream> {
-  return navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    video:
-      type === "video"
-        ? {
-            facingMode: { ideal: "user" },
-            width: { ideal: 640, max: 960 },
-            height: { ideal: 360, max: 540 },
-            frameRate: { ideal: 24, max: 30 },
-          }
-        : false,
+  return openCallMedia(type, {
+    facingMode: { ideal: "user" },
+    width: { ideal: 640, max: 960 },
+    height: { ideal: 360, max: 540 },
+    frameRate: { ideal: 24, max: 30 },
   });
 }
 
