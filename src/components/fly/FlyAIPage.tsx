@@ -170,8 +170,8 @@ export function FlyAIPage({
         });
         const data = (await res.json().catch(() => ({}))) as { image?: string; text?: string; error?: string };
         const outImg = data.image;
-        if (!res.ok || !img) throw new Error(data.error ?? "Could not create the image.");
-        setItems((p) => [...p, { role: "assistant", content: data.text ?? "", image: img }]);
+        if (!res.ok || !outImg) throw new Error(data.error ?? "Could not create the image.");
+        setItems((p) => [...p, { role: "assistant", content: data.text ?? "", image: outImg }]);
         return;
       }
       const res = await fetch("/api/fly-ai", {

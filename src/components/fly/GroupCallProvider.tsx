@@ -1,3 +1,4 @@
+import { openCallMedia } from "../../lib/callMedia";
 /**
  * Group call provider (Messenger-style, up to 5 people).
  *
