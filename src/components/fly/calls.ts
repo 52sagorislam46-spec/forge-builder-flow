@@ -45,6 +45,19 @@ export const RTC_CONFIG: RTCConfiguration = {
         "stun:global.stun.twilio.com:3478",
       ],
     },
+    // Fly's own Metered relay, built in so calls work even when the server
+    // lookup is unreachable (e.g. inside the Android app).
+    { urls: "stun:stun.relay.metered.ca:80" },
+    {
+      urls: [
+        "turn:global.relay.metered.ca:80",
+        "turn:global.relay.metered.ca:80?transport=tcp",
+        "turn:global.relay.metered.ca:443",
+        "turns:global.relay.metered.ca:443?transport=tcp",
+      ],
+      username: "b0a51fef98435887eb20a23a",
+      credential: "SkfJFOAbWhkEt5Ex",
+    },
     // Free relay servers so the audio/video still flows when both sides are
     // behind mobile / carrier NAT where a direct connection is impossible.
     {

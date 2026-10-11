@@ -1,3 +1,4 @@
+import { openCallMedia } from "../../lib/callMedia";
 import {
   useCallback,
   useEffect,
@@ -112,36 +113,17 @@ async function getLocalMedia(type: CallType): Promise<MediaStream> {
   // again — detect it up-front and explain how to re-enable it.
   const needed: Array<"microphone" | "camera"> =
     type === "video" ? ["microphone", "camera"] : ["microphone"];
-  const states = await Promise.all(needed.map(readPermissionState));
-  if (states.some((s) => s === "denied")) {
-    throw new MediaPermissionError(
-      type === "video"
-        ? "Camera and microphone access is blocked for this site. Allow it in your browser settings, then try the call again."
-        : "Microphone access is blocked for this site. Allow it in your browser settings, then try the call again.",
-      true,
-    );
-  }
+  // Android WebView often reports "denied" here even when the mic works, so
+  // never block on it — just try to open the devices.
+  void needed;
+  void readPermissionState;
 
   try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-      video:
-        type === "video"
-          ? {
-              facingMode: { ideal: "user" },
-              // A moderate capture size keeps mobile CPUs and mobile data
-              // links comfortable, which is what stops the freeze / resume
-              // stutter during a live call.
-              width: { ideal: 960, max: 1280 },
-              height: { ideal: 540, max: 720 },
-              frameRate: { ideal: 24, max: 30 },
-            }
-          : false,
-
+    return await openCallMedia(type, {
+      facingMode: { ideal: "user" },
+      width: { ideal: 960, max: 1280 },
+      height: { ideal: 540, max: 720 },
+      frameRate: { ideal: 24, max: 30 },
     });
   } catch (err) {
     const name = (err as DOMException)?.name ?? "";

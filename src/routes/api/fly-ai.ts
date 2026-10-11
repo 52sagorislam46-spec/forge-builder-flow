@@ -26,14 +26,17 @@ export const Route = createFileRoute("/api/fly-ai")({
           messages?: Msg[];
           mode?: "chat" | "image";
           prompt?: string;
+          image?: string;
         } | null;
         const key = process.env["LOVABLE_API_KEY"];
         if (!key) return new Response("Server is not configured.", { status: 500 });
 
-        /* ---------- image generation ---------- */
+        /* ---------- image generation / editing ---------- */
         if (body?.mode === "image") {
           const prompt = (body.prompt ?? "").trim().slice(0, 1500);
           if (!prompt) return Response.json({ error: "Describe the picture first." }, { status: 400 });
+          const src =
+            typeof body.image === "string" && body.image.startsWith("data:image/") ? body.image : null;
           const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -45,7 +48,17 @@ export const Route = createFileRoute("/api/fly-ai")({
             body: JSON.stringify({
               model: "google/gemini-3.1-flash-image",
               modalities: ["image", "text"],
-              messages: [{ role: "user", content: prompt }],
+              messages: [
+                {
+                  role: "user",
+                  content: src
+                    ? [
+                        { type: "text", text: `Edit this photo as asked, keep everything else the same: ${prompt}` },
+                        { type: "image_url", image_url: { url: src } },
+                      ]
+                    : prompt,
+                },
+              ],
             }),
           });
           if (!res.ok) {
