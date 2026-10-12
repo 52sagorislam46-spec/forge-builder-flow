@@ -216,6 +216,74 @@ async function renderStoryImage(
   return new File([blob], "story.jpg", { type: "image/jpeg" });
 }
 
+const SONG_TAGS = ["Bangla", "Romantic", "Birthday", "Sad", "Party", "Islamic", "Hindi", "Lofi"];
+
+/** Online song search (free iTunes preview clips, 30s). */
+function SongPicker({ onClose, onPick }: { onClose: () => void; onPick: (s: { url: string; name: string }) => void }) {
+  const [q, setQ] = useState("Bangla");
+  const [list, setList] = useState<{ id: number; name: string; artist: string; art: string; url: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [playing, setPlaying] = useState("");
+  const audioRef = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    const term = q.trim();
+    if (!term) return;
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=30&term=${encodeURIComponent(term)}`);
+        const j = (await r.json()) as { results: { trackId: number; trackName: string; artistName: string; artworkUrl60: string; previewUrl?: string }[] };
+        setList(j.results.filter((x) => x.previewUrl).map((x) => ({ id: x.trackId, name: x.trackName, artist: x.artistName, art: x.artworkUrl60, url: x.previewUrl! })));
+      } catch {
+        setList([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [q]);
+  const play = (url: string) => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (playing === url) { a.pause(); setPlaying(""); return; }
+    a.src = url; void a.play(); setPlaying(url);
+  };
+  return (
+    <div className="fixed inset-0 z-[70] bg-white flex flex-col">
+      <audio ref={audioRef} onEnded={() => setPlaying("")} />
+      <div className="flex items-center gap-2 px-3 h-14 border-b border-gray-100">
+        <button onClick={onClose} aria-label="Close" className="text-gray-700"><X size={24} /></button>
+        <h2 className="font-bold text-gray-900">Add a song to your story</h2>
+      </div>
+      <div className="p-3">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search music" className="w-full h-10 px-4 rounded-full bg-gray-100 text-gray-900 outline-none" />
+        <div className="flex gap-2 overflow-x-auto mt-3">
+          {SONG_TAGS.map((t) => (
+            <button key={t} onClick={() => setQ(t)} className={`shrink-0 px-3 h-8 rounded-full text-xs font-semibold ${q === t ? "bg-sky-500 text-white" : "bg-gray-100 text-gray-800"}`}>{t}</button>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {loading && <div className="flex justify-center py-6"><Loader2 className="animate-spin text-gray-500" /></div>}
+        {!loading && list.length === 0 && <p className="text-center text-sm text-gray-500 py-6">No songs found</p>}
+        {list.map((s) => (
+          <div key={s.id} className="flex items-center gap-3 px-3 py-2">
+            <button onClick={() => play(s.url)} className="relative shrink-0" aria-label="Preview">
+              <img src={s.art} alt="" className="w-12 h-12 rounded-lg" />
+              <span className="absolute inset-0 flex items-center justify-center text-white text-lg bg-black/30 rounded-lg">{playing === s.url ? "❚❚" : "▶"}</span>
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{s.name}</p>
+              <p className="text-xs text-gray-500 truncate">{s.artist}</p>
+            </div>
+            <button onClick={() => { audioRef.current?.pause(); onPick({ url: s.url, name: `${s.name} · ${s.artist}` }); }} className="px-3 h-8 rounded-full bg-sky-500 text-white text-xs font-semibold">Use</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AddStoryModal({ onClose }: { onClose: () => void }) {
   const { ensureUserProfile } = useAuth();
   const [mode, setMode] = useState<"pick" | "text" | "media">("pick");
@@ -364,15 +432,17 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
             <X size={26} />
           </button>
           <div className="flex gap-2">
+            {songButton}
             {musicInput}
-            {music && (
-              <button onClick={() => setMusic(null)} className="text-white/70 text-xs">
+            {(music || song) && (
+              <button onClick={() => { setMusic(null); setSong(null); }} className="text-white/70 text-xs">
                 Remove
               </button>
             )}
           </div>
         </div>
         <div
+          ref={stageRef}
           className="flex-1 mx-3 rounded-2xl overflow-hidden relative flex items-center justify-center"
           style={{ background: mode === "text" ? TEXT_BGS[bg] : "#000" }}
         >
