@@ -231,6 +231,11 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
   const [selected, setSelected] = useState<number[]>([]);
   const [multi, setMulti] = useState(false);
   const [durations, setDurations] = useState<Record<number, number>>({});
+  const [song, setSong] = useState<{ url: string; name: string } | null>(null);
+  const [showSongs, setShowSongs] = useState(false);
+  const [stickers, setStickers] = useState<StickerItem[]>([]);
+  const [filterIdx, setFilterIdx] = useState(0);
+  const stageRef = useRef<HTMLDivElement>(null);
 
   const loadGallery = (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = Array.from(e.target.files ?? []);
@@ -269,14 +274,18 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
       if (music) {
         setBusy("Uploading music…");
         musicUrl = (await uploadToCloudinary(music)).url;
+      } else if (song) {
+        musicUrl = song.url;
       }
+      const extra = { filter: STORY_FILTERS[filterIdx]!.f, stickers };
+      const decorated = !!text.trim() || stickers.length > 0 || filterIdx !== 0;
       const toUpload: File[] =
         mode === "text"
-          ? [await renderStoryImage(text, bg)]
+          ? [await renderStoryImage(text, bg, undefined, extra)]
           : await Promise.all(
               files.map((f, i) =>
-                i === 0 && text.trim() && !isVideoFile(f)
-                  ? renderStoryImage(text, bg, f)
+                i === 0 && decorated && !isVideoFile(f)
+                  ? renderStoryImage(text, bg, f, extra)
                   : Promise.resolve(f),
               ),
             );
@@ -294,7 +303,7 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
           mediaUrl: uploaded.url,
           mediaType: storyMediaType,
           musicUrl,
-          musicName: music?.name ?? "",
+          musicName: music?.name ?? song?.name ?? "",
           createdAt: serverTimestamp(),
         });
         if (i === 0)
@@ -320,14 +329,26 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
   const musicInput = (
     <label className="flex items-center gap-2 px-3 h-9 rounded-full bg-white/20 text-white text-xs font-semibold cursor-pointer">
       <Music size={16} />
-      <span className="max-w-[140px] truncate">{music ? music.name : "Music"}</span>
+      <span className="max-w-[140px] truncate">{music ? music.name : "File"}</span>
       <input
         type="file"
         accept="audio/*"
         className="hidden"
-        onChange={(e) => setMusic(e.target.files?.[0] ?? null)}
+        onChange={(e) => {
+          setMusic(e.target.files?.[0] ?? null);
+          setSong(null);
+        }}
       />
     </label>
+  );
+  const songButton = (
+    <button
+      onClick={() => setShowSongs(true)}
+      className="flex items-center gap-2 px-3 h-9 rounded-full bg-white/20 text-white text-xs font-semibold"
+    >
+      <Music size={16} />
+      <span className="max-w-[120px] truncate">{song ? song.name : "Songs"}</span>
+    </button>
   );
 
   if (mode === "text" || mode === "media") {
@@ -359,7 +380,35 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
             (isVideoFile(cur) ? (
               <video src={previews[idx]} controls className="max-h-full max-w-full" />
             ) : (
-              <img src={previews[idx]} alt="preview" className="max-h-full max-w-full object-contain" />
+              <img
+                src={previews[idx]}
+                alt="preview"
+                className="max-h-full max-w-full object-contain"
+                style={{ filter: idx === 0 ? STORY_FILTERS[filterIdx]!.f : "none" }}
+              />
+            ))}
+          {(mode === "text" || (cur && !isVideoFile(cur) && idx === 0)) &&
+            stickers.map((st, si) => (
+              <span
+                key={si}
+                className="absolute z-10 text-6xl select-none touch-none cursor-move -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${st.x * 100}%`, top: `${st.y * 100}%` }}
+                onPointerDown={(e) => {
+                  (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                  if (!(e.buttons & 1) && e.pointerType === "mouse") return;
+                  if (!(e.target as HTMLElement).hasPointerCapture(e.pointerId)) return;
+                  const r = stageRef.current?.getBoundingClientRect();
+                  if (!r) return;
+                  const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+                  const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+                  setStickers((s) => s.map((o, j) => (j === si ? { ...o, x, y } : o)));
+                }}
+                onDoubleClick={() => setStickers((s) => s.filter((_, j) => j !== si))}
+              >
+                {st.e}
+              </span>
             ))}
           {(mode === "text" || (cur && !isVideoFile(cur) && idx === 0)) && (
             <textarea
@@ -394,6 +443,43 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
               />
             ))}
           </div>
+        )}
+        {mode === "media" && cur && !isVideoFile(cur) && idx === 0 && (
+          <div className="flex gap-2 overflow-x-auto px-3 pt-3">
+            {STORY_FILTERS.map((f, i) => (
+              <button
+                key={f.n}
+                onClick={() => setFilterIdx(i)}
+                className={`shrink-0 px-3 h-8 rounded-full text-xs font-semibold ${filterIdx === i ? "bg-white text-black" : "bg-white/20 text-white"}`}
+              >
+                {f.n}
+              </button>
+            ))}
+          </div>
+        )}
+        {(mode === "text" || (cur && !isVideoFile(cur) && idx === 0)) && (
+          <div className="flex gap-1 overflow-x-auto px-3 pt-2">
+            {STICKERS.map((e) => (
+              <button
+                key={e}
+                onClick={() => setStickers((s) => [...s, { e, x: 0.5, y: 0.4 }])}
+                className="shrink-0 w-10 h-10 text-2xl"
+                aria-label={`Add sticker ${e}`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
+        {showSongs && (
+          <SongPicker
+            onClose={() => setShowSongs(false)}
+            onPick={(s) => {
+              setSong(s);
+              setMusic(null);
+              setShowSongs(false);
+            }}
+          />
         )}
         {error && <p className="text-sm text-red-300 text-center px-4">{error}</p>}
         <div className="p-3 flex justify-end">
