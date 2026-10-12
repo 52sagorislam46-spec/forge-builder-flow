@@ -11,3 +11,6 @@
 - [x] Push notifications: VAPID key added
 - [x] Fly AI: voice, gallery/camera photo, copy/edit/delete, selectable text
 - [x] Fly Agro: follow-up chat, voice, sources & confident diagnosis
+- [x] Fly Agro: exact counting from photo
+- [x] Story: online song search & picker
+- [x] Story: stickers (drag) & photo filters
