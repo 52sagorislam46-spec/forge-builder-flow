@@ -145,8 +145,24 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, max: number) {
   return out;
 }
 
+export const STORY_FILTERS = [
+  { n: "Normal", f: "none" },
+  { n: "Warm", f: "sepia(0.35) saturate(1.4)" },
+  { n: "B&W", f: "grayscale(1)" },
+  { n: "Vivid", f: "saturate(1.8) contrast(1.1)" },
+  { n: "Cool", f: "hue-rotate(20deg) saturate(1.2)" },
+  { n: "Fade", f: "contrast(0.85) brightness(1.1)" },
+];
+const STICKERS = ["😍", "😂", "🔥", "❤️", "👍", "🎉", "🌸", "⭐", "😎", "🥳", "💯", "🙏", "🌙", "☀️", "🌾", "🎂"];
+type StickerItem = { e: string; x: number; y: number };
+
 /** Renders a text story (or a photo with a caption) into a 1080x1920 JPEG. */
-async function renderStoryImage(text: string, bgIdx: number, photo?: File): Promise<File> {
+async function renderStoryImage(
+  text: string,
+  bgIdx: number,
+  photo?: File,
+  extra?: { filter?: string; stickers?: StickerItem[] },
+): Promise<File> {
   const W = 1080, H = 1920;
   const c = document.createElement("canvas");
   c.width = W;
@@ -160,7 +176,9 @@ async function renderStoryImage(text: string, bgIdx: number, photo?: File): Prom
     await img.decode();
     const s = Math.min(W / img.width, H / img.height);
     const w = img.width * s, h = img.height * s;
+    if (extra?.filter && extra.filter !== "none") ctx.filter = extra.filter;
     ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+    ctx.filter = "none";
   } else {
     const [a, b] = TEXT_BG_STOPS[bgIdx]!;
     const g = ctx.createLinearGradient(0, 0, W, H);
@@ -188,8 +206,82 @@ async function renderStoryImage(text: string, bgIdx: number, photo?: File): Prom
       ctx.fillText(l, W / 2, y);
     });
   }
+  for (const st of extra?.stickers ?? []) {
+    ctx.font = "160px system-ui, 'Apple Color Emoji', 'Noto Color Emoji', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(st.e, st.x * W, st.y * H);
+  }
   const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), "image/jpeg", 0.9));
   return new File([blob], "story.jpg", { type: "image/jpeg" });
+}
+
+const SONG_TAGS = ["Bangla", "Romantic", "Birthday", "Sad", "Party", "Islamic", "Hindi", "Lofi"];
+
+/** Online song search (free iTunes preview clips, 30s). */
+function SongPicker({ onClose, onPick }: { onClose: () => void; onPick: (s: { url: string; name: string }) => void }) {
+  const [q, setQ] = useState("Bangla");
+  const [list, setList] = useState<{ id: number; name: string; artist: string; art: string; url: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [playing, setPlaying] = useState("");
+  const audioRef = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    const term = q.trim();
+    if (!term) return;
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=30&term=${encodeURIComponent(term)}`);
+        const j = (await r.json()) as { results: { trackId: number; trackName: string; artistName: string; artworkUrl60: string; previewUrl?: string }[] };
+        setList(j.results.filter((x) => x.previewUrl).map((x) => ({ id: x.trackId, name: x.trackName, artist: x.artistName, art: x.artworkUrl60, url: x.previewUrl! })));
+      } catch {
+        setList([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [q]);
+  const play = (url: string) => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (playing === url) { a.pause(); setPlaying(""); return; }
+    a.src = url; void a.play(); setPlaying(url);
+  };
+  return (
+    <div className="fixed inset-0 z-[70] bg-white flex flex-col">
+      <audio ref={audioRef} onEnded={() => setPlaying("")} />
+      <div className="flex items-center gap-2 px-3 h-14 border-b border-gray-100">
+        <button onClick={onClose} aria-label="Close" className="text-gray-700"><X size={24} /></button>
+        <h2 className="font-bold text-gray-900">Add a song to your story</h2>
+      </div>
+      <div className="p-3">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search music" className="w-full h-10 px-4 rounded-full bg-gray-100 text-gray-900 outline-none" />
+        <div className="flex gap-2 overflow-x-auto mt-3">
+          {SONG_TAGS.map((t) => (
+            <button key={t} onClick={() => setQ(t)} className={`shrink-0 px-3 h-8 rounded-full text-xs font-semibold ${q === t ? "bg-sky-500 text-white" : "bg-gray-100 text-gray-800"}`}>{t}</button>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {loading && <div className="flex justify-center py-6"><Loader2 className="animate-spin text-gray-500" /></div>}
+        {!loading && list.length === 0 && <p className="text-center text-sm text-gray-500 py-6">No songs found</p>}
+        {list.map((s) => (
+          <div key={s.id} className="flex items-center gap-3 px-3 py-2">
+            <button onClick={() => play(s.url)} className="relative shrink-0" aria-label="Preview">
+              <img src={s.art} alt="" className="w-12 h-12 rounded-lg" />
+              <span className="absolute inset-0 flex items-center justify-center text-white text-lg bg-black/30 rounded-lg">{playing === s.url ? "❚❚" : "▶"}</span>
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{s.name}</p>
+              <p className="text-xs text-gray-500 truncate">{s.artist}</p>
+            </div>
+            <button onClick={() => { audioRef.current?.pause(); onPick({ url: s.url, name: `${s.name} · ${s.artist}` }); }} className="px-3 h-8 rounded-full bg-sky-500 text-white text-xs font-semibold">Use</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function AddStoryModal({ onClose }: { onClose: () => void }) {
@@ -207,6 +299,11 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
   const [selected, setSelected] = useState<number[]>([]);
   const [multi, setMulti] = useState(false);
   const [durations, setDurations] = useState<Record<number, number>>({});
+  const [song, setSong] = useState<{ url: string; name: string } | null>(null);
+  const [showSongs, setShowSongs] = useState(false);
+  const [stickers, setStickers] = useState<StickerItem[]>([]);
+  const [filterIdx, setFilterIdx] = useState(0);
+  const stageRef = useRef<HTMLDivElement>(null);
 
   const loadGallery = (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = Array.from(e.target.files ?? []);
@@ -245,14 +342,18 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
       if (music) {
         setBusy("Uploading music…");
         musicUrl = (await uploadToCloudinary(music)).url;
+      } else if (song) {
+        musicUrl = song.url;
       }
+      const extra = { filter: STORY_FILTERS[filterIdx]!.f, stickers };
+      const decorated = !!text.trim() || stickers.length > 0 || filterIdx !== 0;
       const toUpload: File[] =
         mode === "text"
-          ? [await renderStoryImage(text, bg)]
+          ? [await renderStoryImage(text, bg, undefined, extra)]
           : await Promise.all(
               files.map((f, i) =>
-                i === 0 && text.trim() && !isVideoFile(f)
-                  ? renderStoryImage(text, bg, f)
+                i === 0 && decorated && !isVideoFile(f)
+                  ? renderStoryImage(text, bg, f, extra)
                   : Promise.resolve(f),
               ),
             );
@@ -270,7 +371,7 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
           mediaUrl: uploaded.url,
           mediaType: storyMediaType,
           musicUrl,
-          musicName: music?.name ?? "",
+          musicName: music?.name ?? song?.name ?? "",
           createdAt: serverTimestamp(),
         });
         if (i === 0)
@@ -296,14 +397,26 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
   const musicInput = (
     <label className="flex items-center gap-2 px-3 h-9 rounded-full bg-white/20 text-white text-xs font-semibold cursor-pointer">
       <Music size={16} />
-      <span className="max-w-[140px] truncate">{music ? music.name : "Music"}</span>
+      <span className="max-w-[140px] truncate">{music ? music.name : "File"}</span>
       <input
         type="file"
         accept="audio/*"
         className="hidden"
-        onChange={(e) => setMusic(e.target.files?.[0] ?? null)}
+        onChange={(e) => {
+          setMusic(e.target.files?.[0] ?? null);
+          setSong(null);
+        }}
       />
     </label>
+  );
+  const songButton = (
+    <button
+      onClick={() => setShowSongs(true)}
+      className="flex items-center gap-2 px-3 h-9 rounded-full bg-white/20 text-white text-xs font-semibold"
+    >
+      <Music size={16} />
+      <span className="max-w-[120px] truncate">{song ? song.name : "Songs"}</span>
+    </button>
   );
 
   if (mode === "text" || mode === "media") {
@@ -319,15 +432,17 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
             <X size={26} />
           </button>
           <div className="flex gap-2">
+            {songButton}
             {musicInput}
-            {music && (
-              <button onClick={() => setMusic(null)} className="text-white/70 text-xs">
+            {(music || song) && (
+              <button onClick={() => { setMusic(null); setSong(null); }} className="text-white/70 text-xs">
                 Remove
               </button>
             )}
           </div>
         </div>
         <div
+          ref={stageRef}
           className="flex-1 mx-3 rounded-2xl overflow-hidden relative flex items-center justify-center"
           style={{ background: mode === "text" ? TEXT_BGS[bg] : "#000" }}
         >
@@ -335,7 +450,35 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
             (isVideoFile(cur) ? (
               <video src={previews[idx]} controls className="max-h-full max-w-full" />
             ) : (
-              <img src={previews[idx]} alt="preview" className="max-h-full max-w-full object-contain" />
+              <img
+                src={previews[idx]}
+                alt="preview"
+                className="max-h-full max-w-full object-contain"
+                style={{ filter: idx === 0 ? STORY_FILTERS[filterIdx]!.f : "none" }}
+              />
+            ))}
+          {(mode === "text" || (cur && !isVideoFile(cur) && idx === 0)) &&
+            stickers.map((st, si) => (
+              <span
+                key={si}
+                className="absolute z-10 text-6xl select-none touch-none cursor-move -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${st.x * 100}%`, top: `${st.y * 100}%` }}
+                onPointerDown={(e) => {
+                  (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                  if (!(e.buttons & 1) && e.pointerType === "mouse") return;
+                  if (!(e.target as HTMLElement).hasPointerCapture(e.pointerId)) return;
+                  const r = stageRef.current?.getBoundingClientRect();
+                  if (!r) return;
+                  const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+                  const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+                  setStickers((s) => s.map((o, j) => (j === si ? { ...o, x, y } : o)));
+                }}
+                onDoubleClick={() => setStickers((s) => s.filter((_, j) => j !== si))}
+              >
+                {st.e}
+              </span>
             ))}
           {(mode === "text" || (cur && !isVideoFile(cur) && idx === 0)) && (
             <textarea
@@ -370,6 +513,43 @@ function AddStoryModal({ onClose }: { onClose: () => void }) {
               />
             ))}
           </div>
+        )}
+        {mode === "media" && cur && !isVideoFile(cur) && idx === 0 && (
+          <div className="flex gap-2 overflow-x-auto px-3 pt-3">
+            {STORY_FILTERS.map((f, i) => (
+              <button
+                key={f.n}
+                onClick={() => setFilterIdx(i)}
+                className={`shrink-0 px-3 h-8 rounded-full text-xs font-semibold ${filterIdx === i ? "bg-white text-black" : "bg-white/20 text-white"}`}
+              >
+                {f.n}
+              </button>
+            ))}
+          </div>
+        )}
+        {(mode === "text" || (cur && !isVideoFile(cur) && idx === 0)) && (
+          <div className="flex gap-1 overflow-x-auto px-3 pt-2">
+            {STICKERS.map((e) => (
+              <button
+                key={e}
+                onClick={() => setStickers((s) => [...s, { e, x: 0.5, y: 0.4 }])}
+                className="shrink-0 w-10 h-10 text-2xl"
+                aria-label={`Add sticker ${e}`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
+        {showSongs && (
+          <SongPicker
+            onClose={() => setShowSongs(false)}
+            onPick={(s) => {
+              setSong(s);
+              setMusic(null);
+              setShowSongs(false);
+            }}
+          />
         )}
         {error && <p className="text-sm text-red-300 text-center px-4">{error}</p>}
         <div className="p-3 flex justify-end">
