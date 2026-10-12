@@ -145,8 +145,24 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, max: number) {
   return out;
 }
 
+export const STORY_FILTERS = [
+  { n: "Normal", f: "none" },
+  { n: "Warm", f: "sepia(0.35) saturate(1.4)" },
+  { n: "B&W", f: "grayscale(1)" },
+  { n: "Vivid", f: "saturate(1.8) contrast(1.1)" },
+  { n: "Cool", f: "hue-rotate(20deg) saturate(1.2)" },
+  { n: "Fade", f: "contrast(0.85) brightness(1.1)" },
+];
+const STICKERS = ["😍", "😂", "🔥", "❤️", "👍", "🎉", "🌸", "⭐", "😎", "🥳", "💯", "🙏", "🌙", "☀️", "🌾", "🎂"];
+type StickerItem = { e: string; x: number; y: number };
+
 /** Renders a text story (or a photo with a caption) into a 1080x1920 JPEG. */
-async function renderStoryImage(text: string, bgIdx: number, photo?: File): Promise<File> {
+async function renderStoryImage(
+  text: string,
+  bgIdx: number,
+  photo?: File,
+  extra?: { filter?: string; stickers?: StickerItem[] },
+): Promise<File> {
   const W = 1080, H = 1920;
   const c = document.createElement("canvas");
   c.width = W;
@@ -160,7 +176,9 @@ async function renderStoryImage(text: string, bgIdx: number, photo?: File): Prom
     await img.decode();
     const s = Math.min(W / img.width, H / img.height);
     const w = img.width * s, h = img.height * s;
+    if (extra?.filter && extra.filter !== "none") ctx.filter = extra.filter;
     ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+    ctx.filter = "none";
   } else {
     const [a, b] = TEXT_BG_STOPS[bgIdx]!;
     const g = ctx.createLinearGradient(0, 0, W, H);
@@ -187,6 +205,12 @@ async function renderStoryImage(text: string, bgIdx: number, photo?: File): Prom
       ctx.fillStyle = "#fff";
       ctx.fillText(l, W / 2, y);
     });
+  }
+  for (const st of extra?.stickers ?? []) {
+    ctx.font = "160px system-ui, 'Apple Color Emoji', 'Noto Color Emoji', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(st.e, st.x * W, st.y * H);
   }
   const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), "image/jpeg", 0.9));
   return new File([blob], "story.jpg", { type: "image/jpeg" });
